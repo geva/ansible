@@ -144,6 +144,7 @@ class TaskQueueManager:
         shared_loader_obj = SharedPluginLoaderObj()
 
         display.debug("queuing thread starting")
+        print_count = 0
         while not self._terminated:
             available_workers = []
             for idx, entry in enumerate(self._workers):
@@ -151,7 +152,11 @@ class TaskQueueManager:
                 if worker_prc is None or not worker_prc.is_alive():
                     available_workers.append(idx)
 
-            if len(available_workers) == 0:
+            if len(available_workers) == 0 or len(self._queued_tasks) == 0:
+                print_count += 1
+                if print_count > 100:
+                    print("available workers: %s/%s, len queued tasks: %s" % (len(available_workers), len(self._workers), len(self._queued_tasks)))
+                    print_count = 0
                 time.sleep(0.01)
                 continue
 
@@ -180,12 +185,16 @@ class TaskQueueManager:
                         self._variable_manager,
                         shared_loader_obj,
                     )
-                    self._workers[worker_idx][0] = worker_prc
+                    print("%s: starting worker" % os.getpid())
                     worker_prc.start()
+                    print("%s: putting worker in slot %s" % (os.getpid(), worker_idx))
+                    self._workers[worker_idx][0] = worker_prc
+                    print("%s: done with worker" % os.getpid())
                     display.debug("worker is %d (out of %d available)" % (worker_idx+1, len(self._workers)))
 
                 except (EOFError, IOError, AssertionError) as e:
                     # most likely an abort
+                    print("%s: WORKER QUEUE ERROR: %s" % (os.getpid(), e))
                     display.debug("got an error while queuing: %s" % e)
                     break
 
